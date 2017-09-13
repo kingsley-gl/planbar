@@ -2,8 +2,8 @@
 # @Time    : 2017/08/11
 # @Author  : kingsley kwong
 # @Site    : https://github.com/kingsley-gl/planbar.git
-# @File    : pillar.py
-# @Software: 暗梁源码文件
+# @File    : pillar.py 暗梁源码文件
+# @Software: 
 # @Function: 
 """
 Example Script for an liang
@@ -793,8 +793,6 @@ class Pillar(object):
         stirrup_props = ReinforcementShapeProperties.rebar(**stirrup_args)
 
         #-------------------------------------#
-
-
 
         args = {'length':length,
                 'width':width,
