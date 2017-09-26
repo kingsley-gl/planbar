@@ -2,7 +2,7 @@
 <Element>
     <Script>
         <!-- <Name>beam_chn_std.pyc</Name> -->
-        <Name>JunheModels\beam.pyc</Name>   
+        <Name>JunheModels\beam.py</Name>   
         <Title>beam</Title>
         <TextId>1000</TextId>
         <ReadLastInput>False</ReadLastInput>
@@ -388,7 +388,7 @@
                 <Name>WaistBarGrade</Name>
                 <Text>Waist Bar Steel Grade</Text>
                 <TextId>4502</TextId>
-                <Value>5</Value>
+                <Value>4</Value>
                 <ValueType>ReinfSteelGrade</ValueType>
             </Parameter>
             <Parameter>
@@ -441,18 +441,18 @@
                 <ValueType>checkbox</ValueType>
             </Parameter>
             <Parameter>
+                <Name>TieBarGrade</Name>
+                <Text>Tie Bar Grade</Text>
+                <TextId>4510</TextId>
+                <Value>3</Value>
+                <ValueType>ReinfSteelGrade</ValueType>
+            </Parameter>
+            <Parameter>
                 <Name>TieBarDia</Name>
                 <Text>Tie Bar Diameter</Text>
                 <TextId>4509</TextId>
                 <Value>8</Value>
                 <ValueType>ReinfBarDiameter</ValueType>
-            </Parameter>
-            <Parameter>
-                <Name>TieBarGrade</Name>
-                <Text>Tie Bar Grade</Text>
-                <TextId>4510</TextId>
-                <Value>2</Value>
-                <ValueType>ReinfSteelGrade</ValueType>
             </Parameter>
             <Parameter>
                 <Name>TieBarRatio</Name>
@@ -480,6 +480,13 @@
                 <Value>SMT\\concrete_exposed_concrete_holes</Value>
                 <DisableButtonIsShown>False</DisableButtonIsShown>
                 <ValueType>MaterialButton</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>Entire</Name>
+                <Text>EntirePart</Text>
+                <!-- <TextId></TextId> -->
+                <Value>True</Value>
+                <ValueType>checkbox</ValueType>
             </Parameter>
 <!--             <Parameter>
                 <Name>Layer</Name>

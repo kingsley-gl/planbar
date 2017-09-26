@@ -28,7 +28,7 @@ import GeometryValidate as GeometryValidate
 
 from HandleDirection import HandleDirection
 from HandleProperties import HandleProperties
-from PythonPart import View2D3D, PythonPart   
+from PythonPart import View2D3D, PythonPart,PythonPartGroup  
 import logging
 import math        
 
@@ -92,8 +92,9 @@ def create_element(build_ele, doc):
     
 
     element = Beam(doc)
- 
+
     return element.create(build_ele)
+
 
 
 
@@ -111,7 +112,7 @@ class Beam(object):
             doc: Input document
             文档输入
         '''
-        self.model_ele_list = None
+        self.model_ele_list = []
         self.handle_list = []
         self.document = doc
 
@@ -139,28 +140,38 @@ class Beam(object):
             tuple with created elements and handles.
             被创造元素以及其句柄，由元祖打包返回
         '''
-
+        views_list = []
         self.data_read(build_ele.get_parameter_dict())
         self.texturedef = AllplanBasisElements.TextureDefinition(self.Surface)
+        pythonpart_list = []
+
+
 
         polyhedron = self.create_geometry()
+
         reinforcement = self.create_reinforcement()
-
-        views = [View2D3D(polyhedron)]
         
-        pythonpart = PythonPart ("Beam",                                             #ID
-                                 parameter_list = build_ele.get_params_list(),          #.pyp 参数列表
-                                 hash_value     = build_ele.get_hash(),                 #.pyp 哈希值
-                                 python_file    = build_ele.pyp_file_name,              #.pyp 文件名
-                                 views          = views,                                #图形视图
-                                 reinforcement  = reinforcement,                        #增强构建
-                                 common_props   = self.com_prop)                        #格式参数
+
+        if self.Entire:
+            views_list += polyhedron
+            views = [View2D3D(views_list)]
+            pythonpart = PythonPart ("Beam",                                             #ID
+                                     parameter_list = build_ele.get_params_list(),          #.pyp 参数列表
+                                     hash_value     = build_ele.get_hash(),                 #.pyp 哈希值
+                                     python_file    = build_ele.pyp_file_name,              #.pyp 文件名
+                                     views          = views,                                #图形视图
+                                     reinforcement  = reinforcement,                        #增强构建
+                                     common_props   = self.com_prop)                        #格式参数
 
 
-
+            self.model_ele_list = pythonpart.create()
+        else:
+            self.model_ele_list += polyhedron
+            self.model_ele_list += reinforcement
         # self.create_handle()
 
-        self.model_ele_list = pythonpart.create()
+
+
 
         return (self.model_ele_list, self.handle_list)
 
@@ -232,10 +243,11 @@ class Beam(object):
         err,rectangle = AllplanGeo.MakeSubtraction(rectangle,key_slot_3)
         err,rectangle = AllplanGeo.MakeSubtraction(rectangle,key_slot_4)
 
+        approximation = AllplanGeo.ApproximationSettings(AllplanGeo.eApproximationSettingsType.ASET_BREP_TESSELATION, 1)
+        err,rectangle = AllplanGeo.CreatePolyhedron(rectangle,approximation)
+
 
         return [AllplanBasisElements.ModelElement3D(self.com_prop,self.texturedef, rectangle)]
-
-
 
 
     def create_reinforcement(self):
@@ -244,10 +256,11 @@ class Beam(object):
         构造并添加增强构建函数
 
         Args:
-            build_ele: build_ele.get_parameter_dict()
-            build_ele: .pyp文件内的 Name标签的参数字典
+
         '''
-        reinforcement = []
+        
+        ############################################################################################
+        #calculate
         self.cut_pos_1 = self.CutPosition - self.EndCover  #左段切口位置
         self.last_pos_1 = int((self.CutPosition - self.SlotLength) / self.StirDistance)\
                          * self.StirDistance + self.HeadCover #左段最后一根箍筋位置
@@ -256,14 +269,31 @@ class Beam(object):
         self.last_pos_2 = int((self.Length - self.SlotLength - (self.CutPosition + self.CutLength)\
                          - self.HeadCover - self.EndCover - self.StirDiameter) / self.StirDistance)\
                           * self.StirDistance #右段最后一根箍筋位置
+        ############################################################################################
+
+        com_prop = AllplanBaseElements.CommonProperties()
+        com_prop.HelpConstruction = True
+        reinforcement = []
         if self.StirVisual:
-            reinforcement += self.create_stirrup()
+            stir = self.create_stirrup()
+            for elem in stir:
+                elem.SetAttributes(AllplanBaseElements.Attributes([AllplanBaseElements.AttributeSet([AllplanBaseElements.AttributeInteger(1013,100)])]))
+            reinforcement += stir
         if self.LongbarVisual:
-            reinforcement += self.create_long_steel()
+            l = self.create_long_steel()
+            for elem in l:
+                elem.SetAttributes(AllplanBaseElements.Attributes([AllplanBaseElements.AttributeSet([AllplanBaseElements.AttributeInteger(1013,101)])]))
+            reinforcement += l
         if self.WaistVisual:
-            reinforcement += self.create_waist_steel()
+            waist = self.create_waist_steel()
+            for elem in waist:
+                elem.SetAttributes(AllplanBaseElements.Attributes([AllplanBaseElements.AttributeSet([AllplanBaseElements.AttributeInteger(1013,102)])]))
+            reinforcement += waist
         if self.TieBarVisual:
-            reinforcement += self.create_tie_steel()
+            tie = self.create_tie_steel()
+            for elem in tie:
+                elem.SetAttributes(AllplanBaseElements.Attributes([AllplanBaseElements.AttributeSet([AllplanBaseElements.AttributeInteger(1013,103)])]))
+            reinforcement += tie
 
         return reinforcement
 
@@ -360,7 +390,8 @@ class Beam(object):
                                                    shape_props,
                                                    concrete_props,
                                                    AllplanReinf.StirrupType.Column)
-        return shape
+        if shape.IsValid():
+            return shape
 
     def shape_longitudinal_steel(self,bar_diameter,length,extend=0,bend_flag=False):
         '''
@@ -406,7 +437,8 @@ class Beam(object):
         shape = shape_build.CreateShape(shape_props)
         angle = RotationAngles(90,0,0)
         shape.Rotate(angle)
-        return shape 
+        if shape.IsValid():
+            return shape 
 
     def shape_waist_steel(self,bar_diameter,point_f,point_t,extend=0,mirror=False):
 
@@ -429,7 +461,8 @@ class Beam(object):
                         'bending_shape_type': shape_type}        
         shape_props = ReinforcementShapeProperties.rebar(**rebar_prop)
         shape = shape_build.CreateShape(shape_props)
-        return shape
+        if shape.IsValid():
+            return shape
 
     def shape_tie_steel(self,length,width):
 
@@ -460,8 +493,8 @@ class Beam(object):
                 'end_hook_angle':-45}
 
         shape = GeneralShapeBuilder.create_open_stirrup(**args)
-
-        return shape
+        if shape.IsValid():
+            return shape
 
     def create_handle(self):
         '''
@@ -501,19 +534,16 @@ class Beam(object):
 
 
         #构模
-        shape_stirrup = self.shape_stirrup()                                                               #箍筋
-        
-
+        shape_stirrup = self.shape_stirrup()                                                               #箍筋 
         stirrup_list.append(LinearBarBuilder.create_linear_bar_placement_from_to_by_dist(0,
-                                                                                          shape_stirrup,
-                                                                                          point_f_1,
-                                                                                          point_t_1,
-                                                                                          self.HeadCover,
-                                                                                          self.EndCover,
-                                                                                          self.StirDistance,
-                                                                                          3))
-        self.cut_pos_1 = self.CutPosition - self.EndCover  #切口位置
-        self.last_pos_1 = int((self.CutPosition - self.SlotLength) / self.StirDistance) * self.StirDistance + self.HeadCover #最后一根箍筋位置
+                                                                          shape_stirrup,
+                                                                          point_f_1,
+                                                                          point_t_1,
+                                                                          self.HeadCover,
+                                                                          self.EndCover,
+                                                                          self.StirDistance,
+                                                                          3) )
+
 
         #判断间距添加箍筋
         if self.cut_pos_1 - self.last_pos_1 > self.StirDistance / 2 \
@@ -529,14 +559,15 @@ class Beam(object):
         point_f_2 = AllplanGeo.Point3D(self.CutPosition + self.CutLength,0,0)
         point_t_2 = AllplanGeo.Point3D(self.Length - self.SlotLength,0,0)
 
+
         stirrup_list.append(LinearBarBuilder.create_linear_bar_placement_from_to_by_dist(1,
-                                                                                          shape_stirrup,
-                                                                                          point_t_2,
-                                                                                          point_f_2,
-                                                                                          self.HeadCover,
-                                                                                          self.EndCover,
-                                                                                          self.StirDistance,
-                                                                                          3))
+                                                                              shape_stirrup,
+                                                                              point_t_2,
+                                                                              point_f_2,
+                                                                              self.HeadCover,
+                                                                              self.EndCover,
+                                                                              self.StirDistance,
+                                                                              3))
 
 
 
@@ -565,13 +596,13 @@ class Beam(object):
         steel_list.append(LinearBarBuilder.create_linear_bar_placement_from_to_by_count(0,fst_shape,fst_point_f,fst_point_t,cover,cover,self.FirstNum))
 
         other_shape = self.shape_longitudinal_steel(self.OtherDia,self.Length,-self.SlotLength - self.OtherHeadCover)
+
         distance = 0
         for num in range(self.LongBarLines - 1):
             distance += self.BarDistance
             oth_point_f = AllplanGeo.Point3D(0,0,cover+distance)
             oth_point_t = AllplanGeo.Point3D(0,self.Width,cover+distance)
             steel_list.append(LinearBarBuilder.create_linear_bar_placement_from_to_by_count(0,other_shape,oth_point_f,oth_point_t,cover,cover,self.FirstNum))
-
         return steel_list
 
     def create_waist_steel(self):
@@ -580,8 +611,7 @@ class Beam(object):
         waist_shape = self.shape_waist_steel(self.WaistBarDia,self.WaistHeadCover,self.CutPosition,self.CutBarExtend)
         m_waist_shape = self.shape_waist_steel(self.WaistBarDia,self.CutPosition + self.CutLength,self.Length - self.WaistHeadCover,self.CutBarExtend,True)
         cover = self.ConcreteCover + self.StirDiameter
-        # rest_height = self.Height - self.WaistPosition - self.ConcreteCover
-        # waist_lines = int(rest_height / self.WaistDistance)
+
         distance = 0
         for x in range(self.WaistNum):
             point_f = AllplanGeo.Point3D(0,0,self.WaistPosition + distance)
@@ -592,16 +622,13 @@ class Beam(object):
             m_point_t = AllplanGeo.Point3D(0,self.Width,self.WaistPosition + distance)
             steel_list.append(LinearBarBuilder.create_linear_bar_placement_from_to_by_count(0,m_waist_shape,m_point_f,m_point_t,cover,cover,2))
             distance += self.WaistDistance
-            # if rest_height - distance > 0 and rest_height - distance < self.WaistDistance:
 
         return steel_list
 
     def create_tie_steel(self):
         steel_list = []
-        # cover = self.ConcreteCover + self.StirDiameter
-        # rest_height = self.Height - self.WaistPosition - self.ConcreteCover
-        # waist_lines = int(rest_height / self.WaistDistance)
         tie_shape = self.shape_tie_steel(self.Width,4*self.TieBarDia)
+
         distance = 0
         for x in range(self.WaistNum):
             point_f_x = AllplanGeo.Point3D(self.SlotLength + self.StirDiameter,0,self.WaistPosition - 2*self.TieBarDia + distance)
